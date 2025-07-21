@@ -1,0 +1,15 @@
+langchain
+langgraph
+langchain-openai
+fastapi
+uvicorn
+python-dotenv
+beautifulsoup4
+requests
+pandas
+matplotlib
+seaborn
+streamlit
+faiss-cpu
+tiktoken
+feedparser
