@@ -1,0 +1,46 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug FastAPI Backend",
+            "type": "python",
+            "request": "launch",
+            "module": "uvicorn",
+            "args": ["main:app", "--reload"],
+            "jinja": true,
+            "justMyCode": false,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "Debug Workflow",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/debug_workflow.py",
+            "args": ["--query", "test query"],
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "Debug Streamlit Frontend",
+            "type": "python",
+            "request": "launch",
+            "program": "streamlit",
+            "args": ["run", "dashboard.py"],
+            "justMyCode": false
+        },
+        {
+            "name": "Debug Agents",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/debug_workflow.py",
+            "args": ["--query", "Glasgow employment trends 2024"],
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        }
+    ]
+}

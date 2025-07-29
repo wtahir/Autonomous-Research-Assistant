@@ -1,135 +1,102 @@
-import os
+from typing import List, Dict
 import logging
 from openai import AzureOpenAI
+import os
 from dotenv import load_dotenv
-from typing import List, Dict
-import json
-import requests
-import feedparser
+from arxiv import Client, Search, SortCriterion
 
-# Load environment variables
-load_dotenv()
-
-# Logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+load_dotenv()
 
 class SearchAgent:
-    """
-    A specialized agent for conducting academic research via arXiv and Azure OpenAI.
-    """
-
     def __init__(self):
-        self.client = AzureOpenAI(
-            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-            api_version="2024-02-01"
-        )
-        self.deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT")
-        logger.info("SearchAgent initialized successfully")
-
-    def run(self, query: str, max_results: int = 5) -> List[Dict]:
-        """Main entry point to execute a research query"""
         try:
-            logger.info(f"Executing search for query: {query}")
+            self.client = AzureOpenAI(
+                azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+                api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+                api_version="2024-02-01"
+            )
+            self.deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT")
+            self.arxiv_client = Client()
+            logger.info("SearchAgent initialized successfully")
+        except Exception as e:
+            logger.error(f"SearchAgent initialization failed: {str(e)}")
+            raise
 
-            # Step 1: Generate search queries
-            queries = self._generate_search_queries(query)
-            logger.info(f"Generated search queries: {queries}")
+    def run(self, query: str, max_results: int = 10) -> List[Dict]:
+        if not query:
+            logger.warning("Empty query provided")
+            return []
 
-            # Step 2: Search arXiv for each query
-            all_results = []
-            for q in queries:
-                results = self._arxiv_search(q, max_results)
-                all_results.extend(results)
+        try:
+            # Perform arXiv search
+            search = Search(
+                query=query,
+                max_results=max_results,
+                sort_by=SortCriterion.SubmittedDate
+            )
+            results = list(self.arxiv_client.results(search))
+            if not results:
+                logger.warning(f"No results found for query: {query}")
+                return []
 
-            # Step 3: Analyze and summarize
-            analysis = self._analyze_results(query, all_results)
+            # Compute relevance scores using embeddings
+            query_embedding = self._get_embedding(query)
+            processed_results = []
+            for entry in results:
+                try:
+                    summary = entry.summary or ""
+                    content_embedding = self._get_embedding(summary)
+                    relevance_score = self._cosine_similarity(query_embedding, content_embedding)
+                    processed_results.append({
+                        "title": entry.title,
+                        "content": summary,
+                        "authors": [author.name for author in entry.authors],
+                        "url": entry.pdf_url,
+                        "source": "arxiv",
+                        "relevance_score": relevance_score,
+                        "quality_score": 0.7,  # Placeholder, improve if needed
+                        "published": entry.published.isoformat()
+                    })
+                except Exception as e:
+                    logger.error(f"Error processing entry {entry.title}: {str(e)}")
+                    continue
 
-            # Step 4: Format
-            formatted_results = self._format_results(all_results)
-            logger.info(f"Search completed. Found {len(formatted_results)} results.")
-
-            return formatted_results
-
+            logger.info(f"Processed {len(processed_results)} results for query: {query}")
+            return processed_results
         except Exception as e:
             logger.error(f"Search failed: {str(e)}")
-            raise RuntimeError(f"Search execution failed: {str(e)}")
+            return []
 
-    def _generate_search_queries(self, topic: str) -> List[str]:
-        response = self.client.chat.completions.create(
-            model=self.deployment,
-            messages=[
-                {"role": "system", "content": "Generate 2 detailed research search query variations."},
-                {"role": "user", "content": topic}
-            ],
-            temperature=0.7,
-            max_tokens=100
-        )
-        queries = response.choices[0].message.content.strip().split("\n")
-        return [q.strip("- ").strip() for q in queries if q.strip()]
+    def _get_embedding(self, text: str) -> List[float]:
+        try:
+            response = self.client.embeddings.create(
+                model="text-embedding-3-large",
+                input=text
+            )
+            return response.data[0].embedding
+        except Exception as e:
+            logger.error(f"Embedding failed: {str(e)}")
+            return [0.0] * 1536  # Fallback dimension
 
-    def _arxiv_search(self, query: str, max_results: int = 5) -> List[Dict]:
-        params = {
-            "search_query": query,
-            "max_results": max_results,
-            "sortBy": "relevance"
-        }
-        response = requests.get("http://export.arxiv.org/api/query", params=params)
-        feed = feedparser.parse(response.text)
+    def _cosine_similarity(self, vec1: List[float], vec2: List[float]) -> float:
+        try:
+            from numpy import dot
+            from numpy.linalg import norm
+            return dot(vec1, vec2) / (norm(vec1) * norm(vec2))
+        except Exception:
+            return 0.5  # Fallback score
 
-        return [{
-            "title": entry.title,
-            "url": entry.id,
-            "authors": [author.name for author in entry.authors],
-            "summary": entry.summary
-        } for entry in feed.entries]
-    
-
-    def _analyze_results(self, query: str, results: List[Dict]) -> Dict:
-        content = json.dumps(results[:3], indent=2)  # limit to 3 for brevity
-        response = self.client.chat.completions.create(
-            model=self.deployment,
-            messages=[
-                {"role": "system", "content": "Summarize the key findings from academic search results."},
-                {"role": "user", "content": f"Query: {query}\n\nResults:\n{content}"}
-            ],
-            temperature=0.3
-        )
-        return {
-            "summary": response.choices[0].message.content
-        }
-
-    def _format_results(self, raw_results: List[Dict]) -> List[Dict]:
-        formatted = []
-        for i, result in enumerate(raw_results):
-            formatted.append({
-                "title": result["title"],
-                "url": result["url"],
-                "content": result["summary"][:300] + "...",
-                "authors": result["authors"],
-                "relevance_score": self._calculate_relevance(result["summary"]),
-                "quality_score": self._calculate_quality(result["summary"]),
-            })
-        return sorted(formatted, key=lambda x: x["relevance_score"], reverse=True)
-
-    def _calculate_relevance(self, content: str) -> float:
-        return 0.9  # Placeholder
-
-    def _calculate_quality(self, content: str) -> float:
-        return 0.8  # Placeholder
-
-
-# Example usage
-if __name__ == "__main__":
-    agent = SearchAgent()
-    results = agent.run("latest AI trends in 2025")
-    print(f"Found {len(results)} results:")
-    for r in results:
-        print(f"\nTitle: {r['title']}")
-        print(f"URL: {r['url']}")
-        print(f"Score: {r['relevance_score']:.2f}")
-        print(f"Summary: {r['content'][:100]}...")
+# if __name__ == "__main__":
+#     agent = SearchAgent()
+#     results = agent.run("Gaming industry trend")
+#     print(f"\nFound {len(results)} papers:")
+#     for i, paper in enumerate(results, 1):
+#         print(f"\n{i}. {paper['title']}")
+#         print(f"   Score: {paper['relevance_score']:.2f} (Quality: {paper['quality_score']:.2f})")
+#         print(f"   Authors: {', '.join(paper['authors'][:3])}" + ("..." if len(paper['authors']) > 3 else ""))
+#         print(f"   Published: {paper.get('published', 'N/A')}")
 
 
 # simple search agent

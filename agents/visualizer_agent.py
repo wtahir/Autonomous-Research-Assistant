@@ -1,85 +1,153 @@
 import matplotlib.pyplot as plt
 import seaborn as sns
-import pandas as pd
-from typing import List, Dict
 import base64
 from io import BytesIO
+import pandas as pd
+from typing import Dict, List
 
 class VisualizerAgent:
     def __init__(self):
-        sns.set_style("whitegrid")
+        # Updated style settings that work with modern Seaborn
+        plt.style.use('seaborn-v0_8')  # Use compatible style name
+        sns.set_theme(style="whitegrid", palette="husl")  # Modern theme setup
+
+    def generate_visualizations(self, papers: List[Dict]) -> Dict[str, str]:
+        """Generate visualizations from paper data"""
+        viz_dict = {}
         
-    def generate_visualizations(self, data: List[Dict]) -> Dict[str, str]:
-        """Generate multiple visualization types"""
-        df = pd.DataFrame(data)
+        try:
+            # Create DataFrame with error handling
+            plot_data = []
+            for p in papers:
+                if not isinstance(p, dict):
+                    continue
+                
+                plot_data.append({
+                    'title': (p.get('title', '')[:30] + '...') if len(p.get('title', '')) > 30 else p.get('title', ''),
+                    'relevance': float(p.get('relevance_score', 0)),
+                    'quality': float(p.get('quality_score', 0))
+                })
+            
+            df = pd.DataFrame(plot_data)
+            
+            if len(df) > 1:  # Need at least 2 points for meaningful plots
+                viz_dict['relevance_scores'] = self._create_barplot(
+                    df, 
+                    x='title', 
+                    y='relevance', 
+                    title="Paper Relevance Scores"
+                )
+                
+                viz_dict['quality_vs_relevance'] = self._create_scatterplot(
+                    df,
+                    x='relevance',
+                    y='quality',
+                    title="Quality vs Relevance"
+                )
+            else:
+                print("Insufficient data points for visualization")
+                
+        except Exception as e:
+            print(f"Visualization error: {str(e)}")
         
-        # Convert date column to datetime if present
-        if 'date' in df.columns:
-            df['date'] = pd.to_datetime(df['date'], errors='coerce')
-        
-        return {
-            "trend_plot": self._create_trend_plot(df),
-            "distribution_plot": self._create_distribution_plot(df),
-            "correlation_matrix": self._create_correlation_matrix(df)
-        }
-    
-    def _create_trend_plot(self, df: pd.DataFrame) -> str:
-        """Generate time series or trend visualization"""
-        plt.figure(figsize=(10, 6))
-        if 'date' in df.columns and 'value' in df.columns and not df[['date', 'value']].dropna().empty:
-            df.sort_values('date', inplace=True)
-            plt.plot(df['date'], df['value'], marker='o')
-            plt.title("Trend Analysis")
-            plt.xlabel("Date")
-            plt.ylabel("Value")
-        else:
-            plt.text(0.5, 0.5, "Insufficient data for trend plot", ha='center', va='center')
-        return self._plot_to_base64()
-    
-    def _create_distribution_plot(self, df: pd.DataFrame) -> str:
-        """Generate distribution visualization"""
-        plt.figure(figsize=(10, 6))
-        if 'value' in df.columns and not df['value'].dropna().empty:
-            sns.histplot(df['value'], kde=True)
-            plt.title("Distribution Analysis")
-        else:
-            plt.text(0.5, 0.5, "No 'value' data for distribution plot", ha='center', va='center')
-        return self._plot_to_base64()
-    
-    def _create_correlation_matrix(self, df: pd.DataFrame) -> str:
-        """Generate correlation matrix"""
-        plt.figure(figsize=(10, 6))
-        numeric_df = df.select_dtypes(include=['number'])
-        if not numeric_df.empty:
-            sns.heatmap(numeric_df.corr(), annot=True, cmap='coolwarm', fmt=".2f")
-            plt.title("Correlation Matrix")
-        else:
-            plt.text(0.5, 0.5, "No numeric data for correlation matrix", ha='center', va='center')
-        return self._plot_to_base64()
-    
-    def _plot_to_base64(self) -> str:
-        """Convert matplotlib plot to base64 string"""
+        return viz_dict
+
+    def _create_barplot(self, df, x: str, y: str, title: str) -> str:
+        """Helper to create bar plot"""
+        plt.figure(figsize=(10, 5))
+        ax = sns.barplot(data=df, x=x, y=y)
+        ax.set_title(title)
+        plt.xticks(rotation=45, ha='right')
+        plt.tight_layout()
+        return self._fig_to_base64()
+
+    def _create_scatterplot(self, df, x: str, y: str, title: str) -> str:
+        """Helper to create scatter plot"""
+        plt.figure(figsize=(8, 6))
+        ax = sns.scatterplot(
+            data=df, 
+            x=x, 
+            y=y, 
+            size=y, 
+            hue=y, 
+            sizes=(50, 200),
+            legend=False
+        )
+        ax.set_title(title)
+        plt.tight_layout()
+        return self._fig_to_base64()
+
+    def _fig_to_base64(self) -> str:
+        """Convert matplotlib figure to base64"""
         buf = BytesIO()
-        plt.savefig(buf, format='png', bbox_inches='tight')
+        plt.savefig(buf, format='png', bbox_inches='tight', dpi=100)
         plt.close()
         return base64.b64encode(buf.getvalue()).decode('utf-8')
 
-    
 
+
+# import matplotlib.pyplot as plt
+# import seaborn as sns
 # import base64
+# from io import BytesIO
+# import pandas as pd
+# from typing import Dict, List
 
-# if __name__ == "__main__":
-#     agent = VisualizerAgent()
-#     sample_data = [
-#         {"date": "2025-01-01", "value": 10},
-#         {"date": "2025-01-02", "value": 15},
-#         {"date": "2025-01-03", "value": 7},
-#         {"date": "2025-01-04", "value": 20},
-#     ]
-#     results = agent.generate_visualizations(sample_data)
-    
-#     for name, b64img in results.items():
-#         filename = f"{name}.png"
-#         with open(filename, "wb") as f:
-#             f.write(base64.b64decode(b64img))
-#         print(f"Saved {filename}")
+# class VisualizerAgent:
+#     def __init__(self):
+#         plt.style.use('seaborn')
+#         sns.set_palette("husl")
+
+#     def generate_visualizations(self, papers: List[Dict]) -> Dict[str, str]:
+#         """Generate visualizations from paper data"""
+#         viz_dict = {}
+        
+#         # Create DataFrame from paper data
+#         df = pd.DataFrame([{
+#             'title': p['title'][:30] + '...' if len(p['title']) > 30 else p['title'],
+#             'relevance': p['relevance_score'],
+#             'quality': p['quality_score']
+#         } for p in papers if 'relevance_score' in p])
+        
+#         if len(df) > 0:
+#             # Bar plot of relevance scores
+#             viz_dict['relevance_scores'] = self._create_barplot(
+#                 df, 
+#                 x='title', 
+#                 y='relevance', 
+#                 title="Paper Relevance Scores"
+#             )
+            
+#             # Quality vs Relevance scatter
+#             viz_dict['quality_vs_relevance'] = self._create_scatterplot(
+#                 df,
+#                 x='relevance',
+#                 y='quality',
+#                 title="Quality vs Relevance"
+#             )
+        
+#         return viz_dict
+
+#     def _create_barplot(self, df, x: str, y: str, title: str) -> str:
+#         """Helper to create bar plot"""
+#         plt.figure(figsize=(10, 5))
+#         sns.barplot(data=df, x=x, y=y)
+#         plt.title(title)
+#         plt.xticks(rotation=45, ha='right')
+#         plt.tight_layout()
+#         return self._fig_to_base64()
+
+#     def _create_scatterplot(self, df, x: str, y: str, title: str) -> str:
+#         """Helper to create scatter plot"""
+#         plt.figure(figsize=(8, 6))
+#         sns.scatterplot(data=df, x=x, y=y, size=y, hue=y, sizes=(50, 200))
+#         plt.title(title)
+#         plt.tight_layout()
+#         return self._fig_to_base64()
+
+#     def _fig_to_base64(self) -> str:
+#         """Convert matplotlib figure to base64"""
+#         buf = BytesIO()
+#         plt.savefig(buf, format='png', bbox_inches='tight')
+#         plt.close()
+#         return base64.b64encode(buf.getvalue()).decode('utf-8')

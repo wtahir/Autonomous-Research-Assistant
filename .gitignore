@@ -1,0 +1,41 @@
+# Python-specific
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# Data directories (Chroma DB, raw data)
+data/
+data/vector_store/
+data/raw/
+
+# Environment files (potentially sensitive)
+.env
+env.txt
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Logs and temporary files
+*.log
+*.tmp
+*.bak
+
+# Debug or temporary scripts (optional, review before including)
+debug_workflow.py
+
+# Jupyter notebooks (if any, can be large with outputs)
+*.ipynb_checkpoints/
