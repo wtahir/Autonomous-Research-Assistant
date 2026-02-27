@@ -16,7 +16,7 @@ client = AzureOpenAI(
 try:
     print("Testing Azure OpenAI connection...")
     response = client.chat.completions.create(
-        model=os.getenv("AZURE_OPENAI_DEPLOYMENT"),  # Your deployment name
+        model=os.getenv("AZURE_OPENAI_DEPLOYMENT"),
         messages=[{"role": "user", "content": "Say 'Hello world' in Spanish"}],
         temperature=0
     )
