@@ -1,6 +1,6 @@
 # Autonomous Research Assistant
 
-An AI-powered system that automates market research by coordinating multiple specialized agents.
+An AI-powered system that automates market research by coordinating multiple specialized agents
 
 ## Features
 
